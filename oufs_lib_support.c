@@ -471,7 +471,7 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
     {
       if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
       {
-        oufs_read_inode_by_reference(theblock.entry[i].inode_reference, &inode);
+        oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &inode);
         if (!strcmp(theblock.directory.entry[i].name, token) && inode.type == IT_DIRECTORY)
         {
           // found it!
@@ -554,13 +554,13 @@ int oufs_list(char *cwd, char *path)
   INODE inode;
   oufs_read_inode_by_reference(child, &inode);
 
+  // Get data block pointed to by inode
+  BLOCK_REFERENCE blockref = inode.data[0];
+  BLOCK theblock;
+  vdisk_read_block(blockref, &theblock);
+
   if (inode.type == IT_DIRECTORY)
   {
-    // Get data block pointed to by inode
-    BLOCK_REFERENCE blockref = inode.data[0];
-    BLOCK theblock;
-    vdisk_read_block(blockref, &theblock);
-
     // List the files and directories contained within our dir
     char* filelist[DIRECTORY_ENTRIES_PER_BLOCK];
     int numFiles = 0;
@@ -595,7 +595,7 @@ int oufs_list(char *cwd, char *path)
   else if (inode.type == IT_FILE)
   {
     // It's a file, so just print it's name
-    printf("%s\n", inode.name);
+    printf("%s\n", local_name);
   }
 
   return 0;
