@@ -552,40 +552,48 @@ int oufs_list(char *cwd, char *path)
   INODE inode;
   oufs_read_inode_by_reference(child, &inode);
 
-  // Get data block pointed to by inode
-  BLOCK_REFERENCE blockref = inode.data[0];
-  BLOCK theblock;
-  vdisk_read_block(blockref, &theblock);
-
-  // we're at the end of the path, so list the things
-  char* filelist[DIRECTORY_ENTRIES_PER_BLOCK];
-  int numFiles = 0;
-  for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
+  if (inode.type == IT_DIRECTORY)
   {
-    if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
+    // Get data block pointed to by inode
+    BLOCK_REFERENCE blockref = inode.data[0];
+    BLOCK theblock;
+    vdisk_read_block(blockref, &theblock);
+
+    // List the files and directories contained within our dir
+    char* filelist[DIRECTORY_ENTRIES_PER_BLOCK];
+    int numFiles = 0;
+    for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
     {
-      // Find inode
-      INODE thenode;
-      oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &thenode);
+      if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
+      {
+        // Find inode
+        INODE thenode;
+        oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &thenode);
 
-      // Add name to the list
-      filelist[numFiles] = theblock.directory.entry[i].name;
-        
-      // Add a trailing forward slash if its a directory
-      if (thenode.type == IT_DIRECTORY)
-        strcat(filelist[numFiles], "/");
+        // Add name to the list
+        filelist[numFiles] = theblock.directory.entry[i].name;
+          
+        // Add a trailing forward slash if its a directory
+        if (thenode.type == IT_DIRECTORY)
+          strcat(filelist[numFiles], "/");
 
-      numFiles++;
+        numFiles++;
+      }
+    }
+
+    // Sort list of names
+    qsort(filelist, numFiles, sizeof(char*), cstring_cmp);
+
+    // Print the sorted list
+    for (int i = 0; i < numFiles; i++)
+    {
+      printf("%s\n", filelist[i]);
     }
   }
-
-  // Sort list of names
-  qsort(filelist, numFiles, sizeof(char*), cstring_cmp);
-
-  // Print the sorted list
-  for (int i = 0; i < numFiles; i++)
+  else if (inode.type == IT_FILE)
   {
-    printf("%s\n", filelist[i]);
+    // It's a file, so just print it's name
+    printf("%s\n", inode.name);
   }
 
   return 0;
