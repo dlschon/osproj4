@@ -1,4 +1,4 @@
-all: zformat zinspect zfilez zmkdir zrmdir
+all: zformat zinspect zfilez zmkdir zrmdir ztouch
 
 .c.o:
 	gcc -c $< -o $@
@@ -13,6 +13,8 @@ zmkdir: zmkdir.c
 	gcc vdisk.c oufs_lib_support.c zmkdir.c -o zmkdir
 zrmdir: zrmdir.c
 	gcc vdisk.c oufs_lib_support.c zrmdir.c -o zrmdir
+ztouch: ztouch.c
+	gcc vdisk.c oufs_lib_support.c ztouch.c -o ztouch
 
 clean: 
 	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir
