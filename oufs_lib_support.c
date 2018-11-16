@@ -569,15 +569,12 @@ int oufs_list(char *cwd, char *path)
       oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &thenode);
 
       // Add name to the list
-      if (thenode.type == IT_FILE)
-        filelist[numFiles] = theblock.directory.entry[i].name;
-      else if (thenode.type == IT_DIRECTORY)
-      {
-        // Add a forward slash to denote a directory
-        filelist[numFiles] = theblock.directory.entry[i].name;
-        strcat(filelist[numFiles], theblock.directory.entry[i].name);
+      filelist[numFiles] = theblock.directory.entry[i].name;
+        
+      // Add a trailing forward slash if its a directory
+      if (thenode.type == IT_DIRECTORY)
         strcat(filelist[numFiles], "/");
-      }
+
       numFiles++;
     }
   }
