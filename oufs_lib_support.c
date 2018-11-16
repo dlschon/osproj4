@@ -575,7 +575,7 @@ int oufs_list(char *cwd, char *path)
       {
         // Add a forward slash to denote a directory
         filelist[numFiles] = theblock.directory.entry[i].name;
-        strcat(filelist[numFiles], theblock.directory.entry.name);
+        strcat(filelist[numFiles], theblock.directory.entry[i].name);
         strcat(filelist[numFiles], "/");
       }
       numFiles++;
