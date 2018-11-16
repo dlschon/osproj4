@@ -822,7 +822,7 @@ int oufs_rmdir(char *cwd, char *path)
   return 0;
 }
 
-oufs_touch(char *cwd, char *path)
+int oufs_touch(char *cwd, char *path)
 {
   // Get relative path
   char rel_path[MAX_PATH_LENGTH];
