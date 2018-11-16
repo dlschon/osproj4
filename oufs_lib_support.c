@@ -881,6 +881,7 @@ int oufs_touch(char *cwd, char *path)
 
   // Update entries in parent block
   INODE parent_inode;
+  BLOCK theblock;
   oufs_read_inode_by_reference(new_file_parent, &parent_inode);
   BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
   vdisk_read_block(parent_block_ref, &theblock);
