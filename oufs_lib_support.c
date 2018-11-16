@@ -457,6 +457,7 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
   INODE_REFERENCE lastref = 0;
 
   // Tokenize the path
+  INODE inode;
   char* token = strtok(listdir, "/");
   char lasttoken[FILE_NAME_SIZE];
   memset(lasttoken, '\0', FILE_NAME_SIZE);
@@ -470,7 +471,8 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
     {
       if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
       {
-        if (!strcmp(theblock.directory.entry[i].name, token))
+        oufs_read_inode_by_reference(theblock.entry[i].inode_reference, &inode);
+        if (!strcmp(theblock.directory.entry[i].name, token) && inode.type == IT_DIRECTORY)
         {
           // found it!
           flag = 1;
