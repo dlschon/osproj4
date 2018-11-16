@@ -569,9 +569,9 @@ int oufs_list(char *cwd, char *path)
       oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &thenode);
 
       // Add name to the list
-      if(thenode.type = IT_FILE)
+      if (thenode.type == IT_FILE)
         filelist[numFiles] = theblock.directory.entry[i].name;
-      else if (thenode.type = IT_DIRECTORY)
+      else if (thenode.type == IT_DIRECTORY)
       {
         // Add a forward slash to denote a directory
         filelist[numFiles] = theblock.directory.entry[i].name;
@@ -588,7 +588,7 @@ int oufs_list(char *cwd, char *path)
   // Print the sorted list
   for (int i = 0; i < numFiles; i++)
   {
-    printf("%s/\n", filelist[i]);
+    printf("%s\n", filelist[i]);
   }
 
   return 0;
@@ -876,14 +876,8 @@ int oufs_touch(char *cwd, char *path)
   new_inode.data[0] = new_file_block_ref;
   for (int i = 1; i < BLOCKS_PER_INODE; i++)
     new_inode.data[i] = UNALLOCATED_BLOCK;
-  new_inode.size = 2;
+  new_inode.size = 0;
   oufs_write_inode_by_reference(new_inode_ref, &new_inode);
-
-  // Clean the directory
-  BLOCK theblock;
-  vdisk_read_block(new_file_block_ref, &theblock);
-  oufs_clean_directory_block(new_inode_ref, new_file_parent, &theblock);
-  vdisk_write_block(new_file_block_ref, &theblock);
 
   // Update entries in parent block
   INODE parent_inode;
