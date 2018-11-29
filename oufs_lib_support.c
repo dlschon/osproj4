@@ -1399,7 +1399,7 @@ int oufs_link(char *cwd, char *path_src, char *path_dst)
   {
     // Get inode for file to delete
     INODE inode;
-    oufs_read_inode_by_reference(child, &inode);
+    oufs_read_inode_by_reference(child_src, &inode);
     
     if (inode.type != IT_FILE)
     {
@@ -1423,7 +1423,7 @@ int oufs_link(char *cwd, char *path_src, char *path_dst)
       if (entry.inode_reference == UNALLOCATED_INODE)
       {
         // Found an empty one
-        found_entry = 1
+        found_entry = 1;
 
         // Link it
         entry.name = local_name_dst;
@@ -1446,7 +1446,7 @@ int oufs_link(char *cwd, char *path_src, char *path_dst)
     parent_inode.size++;
     inode.n_references++;
     oufs_write_inode_by_reference(parent_dst, &parent_inode);
-    oufs_write_inode_by_reference(child, &inode);
+    oufs_write_inode_by_reference(child_src, &inode);
   }
   else
   {
