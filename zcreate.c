@@ -21,23 +21,22 @@ int main(int argc, char** argv) {
     vdisk_disk_open(disk_name);
 
     // Open file for reading
-    
+    OUFILE *fp = oufs_fopen(strdup(cwd), strdup(argv[1]), 'w');
 
     // Read byte by byte from stdin
+    unsigned char ch;
     while (read(STDIN_FILENO, &ch, 1) > 0)
     {
-      buf[len] = ch;
-      len +=1;
-    }
-    // Null terminate buf
-    buf[len] = '\0';
+      // Attempt to write the byte to the file
+      int wrote = oufs_fwrite(fp, ch, 1);
 
-    printf(buf);
-    
-    int ret = 0;
-    if(ret != 0) {
-      fprintf(stderr, "Error (%d)\n", ret);
+      // Break the loop if we failed to write the byte. This means the file is full
+      if (wrote == 0)
+        break;
     }
+
+    // Close the file
+    oufs_fclose(fp);
 
     // Clean up
     vdisk_disk_close();

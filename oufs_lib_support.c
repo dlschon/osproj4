@@ -947,7 +947,10 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   char* base = basename(strdup(rel_path));
 
   // Declare struct to be returned in case of error
-  OUFILE fileError = {-1, *mode, -1};
+  OUFILE *fileError = malloc(sizeof(OUFILE));
+  fileError->inode_reference = -1;
+  fileError->mode = *mode;
+  fileError->offset = -1;
 
   // Declare find file outputs
   INODE_REFERENCE parent;
@@ -963,13 +966,13 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     if (*mode == 'r' || *mode == 'a')
     {
       fprintf(stderr, "fopen: Can't open nonexistent file for reading or appending");
-      return &fileError;
+      return fileError;
     }
     else if (*mode == 'w')
     {
       // Use touch to create the file
       if (oufs_touch(cwd, path) == -1)
-        return &fileError;
+        return fileError;
 
       // Run find file again to get the correct inode references
       oufs_find_file(cwd, rel_path, &parent, &child, local_name);
@@ -1002,30 +1005,29 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     }
   }
 
+  OUFILE *fp = malloc(sizeof(OUFILE));
+  fp->inode_reference = child;
+  fp->mode = *mode;
+
   // Create file pointer struct and return it
-  if (*mode == 'r')
+  if (*mode == 'r' || *mode == 'w')
   {
-    OUFILE file = {child, 'r', 0};
-    return &file;
-  }
-  if (*mode == 'w')
-  {
-    OUFILE file = {child, 'w', 0};
-    return &file;
+    fp->offset = 0;
+    return fp;
   }
   if (*mode == 'a')
   {
-    // Get size from file inode for offset
+    // Get offset from inode size field
     INODE *inode;
     oufs_read_inode_by_reference(child, inode);
-    
-    OUFILE file = {child, 'a', inode->size};
-    return &file;
+    fp->offset = inode->size;
+    return fp;
   }
 }
 
 void oufs_fclose(OUFILE *fp)
 {
+  free(fp);
 }
 
 int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
@@ -1126,6 +1128,9 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   // Done writing, save the current data block and inode
   vdisk_write_block(data_block_ref, &data_block);
   oufs_write_inode_by_reference(fp->inode_reference, inode);
+
+  // Update file pointer offset
+  fp->offset += bytes_written;
 
   return bytes_written;
 }
