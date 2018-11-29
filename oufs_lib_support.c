@@ -1327,7 +1327,7 @@ int oufs_remove(char *cwd, char *path)
     for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
     {
       // Does the directory entry point to the one we're deleting?
-      if (parent_block.directory.entry[i].inode_reference == child_inode_ref)
+      if (parent_block.directory.entry[i].inode_reference == child)
       {
         // Set the empty entry to point to our new inode
         strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
