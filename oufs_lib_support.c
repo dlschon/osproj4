@@ -997,7 +997,6 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     BLOCK_REFERENCE data_block_ref;
     BLOCK data_block;
     INODE inode;
-    printf("%d\n", child);
     oufs_read_inode_by_reference(child, &inode);
 
     // If file is open for writing, clear file data first
@@ -1010,14 +1009,17 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
         vdisk_read_block(data_block_ref, &data_block);
         for (int j = 0; j < 256; j++)
         {
-          //data_block.data.data[j] = 0;
+          data_block.data.data[j] = 0;
         }
         vdisk_write_block(data_block_ref, &data_block);
 
         // Deallocate block
         oufs_deallocate_block(data_block_ref);
+
+        inode.data[i] = UNALLOCATED_BLOCK;
       }
     }
+    oufs_write_inode_by_reference(child, &inode);
   }
 
   OUFILE *fp = malloc(sizeof(OUFILE));
