@@ -1313,6 +1313,36 @@ int oufs_remove(char *cwd, char *path)
     }
     oufs_write_inode_by_reference(child, &inode);
     oufs_deallocate_inode(child);
+
+    // Remove reference from parent
+    // Read data for parent of deleted directory
+    INODE parent_inode;
+    oufs_read_inode_by_reference(parent, &parent_inode);
+    BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
+    BLOCK parent_block;
+    vdisk_read_block(parent_block_ref, &parent_block);
+
+    // Remove the directory's entry from its parent directory
+    int removed_entry = 0;
+    for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
+    {
+      // Does the directory entry point to the one we're deleting?
+      if (parent_block.directory.entry[i].inode_reference == child_inode_ref)
+      {
+        // Set the empty entry to point to our new inode
+        strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
+        parent_block.directory.entry[i].inode_reference = UNALLOCATED_INODE;
+        removed_entry = 1;
+        vdisk_write_block(parent_block_ref, &parent_block);
+
+        // Update file count in inode
+        parent_inode.size--;
+        oufs_write_inode_by_reference(parent, &parent_inode);
+
+        // Exit the for loop
+        break;
+      }
+    }
   }
   else
   {
