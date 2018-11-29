@@ -1,4 +1,4 @@
-all: zformat zinspect zfilez zmkdir zrmdir ztouch zcreate zappend zmore zremove
+all: zformat zinspect zfilez zmkdir zrmdir ztouch zcreate zappend zmore zremove zlink
 
 .c.o:
 	gcc -c $< -o $@
@@ -23,6 +23,8 @@ zmore: zmore.c
 	gcc vdisk.c oufs_lib_support.c zmore.c -o zmore
 zremove: zremove.c
 	gcc vdisk.c oufs_lib_support.c zremove.c -o zremove
+zlink: zlink.c
+	gcc vdisk.c oufs_lib_support.c zlink.c -o zlink
 
 clean: 
-	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir ./ztouch ./zcreate ./zappend ./zmore ./zremove
+	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir ./ztouch ./zcreate ./zappend ./zmore ./zremove ./zlink

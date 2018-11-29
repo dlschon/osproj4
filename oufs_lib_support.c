@@ -1285,6 +1285,13 @@ int oufs_remove(char *cwd, char *path)
     // Get inode for file to delete
     INODE inode;
     oufs_read_inode_by_reference(child, &inode);
+    
+    if (inode.type != IT_FILE)
+    {
+      if (debug)
+        fprintf(stderr, "remove: Can only remove files. Use rmdir for directories\n");
+      return -1;
+    }
 
     // Block variables used for deleting
     BLOCK_REFERENCE data_block_ref;
@@ -1311,36 +1318,40 @@ int oufs_remove(char *cwd, char *path)
         inode.data[i] = UNALLOCATED_BLOCK;
       }
     }
+    inode.n_references--;
     oufs_write_inode_by_reference(child, &inode);
     oufs_deallocate_inode(child);
 
-    // Remove reference from parent
-    // Read data for parent of deleted directory
-    INODE parent_inode;
-    oufs_read_inode_by_reference(parent, &parent_inode);
-    BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
-    BLOCK parent_block;
-    vdisk_read_block(parent_block_ref, &parent_block);
-
-    // Remove the directory's entry from its parent directory
-    int removed_entry = 0;
-    for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
+    if (inode.n_references == 0)
     {
-      // Does the directory entry point to the one we're deleting?
-      if (parent_block.directory.entry[i].inode_reference == child)
+      // Remove reference from parent
+      // Read data for parent of deleted directory
+      INODE parent_inode;
+      oufs_read_inode_by_reference(parent, &parent_inode);
+      BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
+      BLOCK parent_block;
+      vdisk_read_block(parent_block_ref, &parent_block);
+
+      // Remove the directory's entry from its parent directory
+      int removed_entry = 0;
+      for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
       {
-        // Set the empty entry to point to our new inode
-        strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
-        parent_block.directory.entry[i].inode_reference = UNALLOCATED_INODE;
-        removed_entry = 1;
-        vdisk_write_block(parent_block_ref, &parent_block);
+        // Does the directory entry point to the one we're deleting?
+        if (parent_block.directory.entry[i].inode_reference == child)
+        {
+          // Set the empty entry to point to our new inode
+          strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
+          parent_block.directory.entry[i].inode_reference = UNALLOCATED_INODE;
+          removed_entry = 1;
+          vdisk_write_block(parent_block_ref, &parent_block);
 
-        // Update file count in inode
-        parent_inode.size--;
-        oufs_write_inode_by_reference(parent, &parent_inode);
+          // Update file count in inode
+          parent_inode.size--;
+          oufs_write_inode_by_reference(parent, &parent_inode);
 
-        // Exit the for loop
-        break;
+          // Exit the for loop
+          break;
+        }
       }
     }
   }
@@ -1354,4 +1365,95 @@ int oufs_remove(char *cwd, char *path)
 
 int oufs_link(char *cwd, char *path_src, char *path_dst)
 {
+  // Get relative paths
+  char rel_path_src[MAX_PATH_LENGTH];
+  char rel_path_dst[MAX_PATH_LENGTH];
+  memset(rel_path_src, 0, MAX_PATH_LENGTH);
+  memset(rel_path_dst, 0, MAX_PATH_LENGTH);
+  oufs_relative_path(cwd, path_src, rel_path_src);
+  oufs_relative_path(cwd, path_dst, rel_path_dst);
+
+  // Get dest directory name
+  char* dst_dir = dirname(strdup(rel_path_dst));
+
+  // Declare find file outputs
+  INODE_REFERENCE parent_src;
+  INODE_REFERENCE child_src;
+  char* local_name_src;
+  INODE_REFERENCE grandparent_dst;
+  INODE_REFERENCE parent_dst;
+  INODE_REFERENCE child_dst;
+  char* local_name_dst;
+  char* local_name_dst_dir;
+
+  // Try to find the files
+  int src_exists = oufs_find_file(cwd, rel_path_src, &parent_src, &child_src, local_name_src);
+  int dst_exists = oufs_find_file(cwd, rel_path_dst, &parent_dst, &child_dst, local_name_dst);
+  int dst_dir_exists = oufs_find_file(cwd, dst_dir, &grandparent_dst, &parent_dst, local_name_dst_dir);
+
+  // Make sure that
+  // (1) source exists
+  // (2) destination does not yet exist
+  // (3) destination parent directory does exist
+  if (src_exists && !dst_exists && dst_dir_exists)
+  {
+    // Get inode for file to delete
+    INODE inode;
+    oufs_read_inode_by_reference(child, &inode);
+    
+    if (inode.type != IT_FILE)
+    {
+      if (debug)
+        fprintf(stderr, "link: Can only link files");
+      return -1;
+    }
+
+    // Get inode for parent directory
+    INODE parent_inode;
+    oufs_read_inode_by_reference(parent_dst, &parent_inode);
+    BLOCK dblock;
+    vdisk_read_block(parent_inode.data[0], &dblock);
+
+    // Iterate through directory entries looking for a blank one
+    int found_entry = 0;
+    DIRECTORY_ENTRY entry;
+    for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
+    {
+      entry = dblock.directory.entry[i];
+      if (entry.inode_reference == UNALLOCATED_INODE)
+      {
+        // Found an empty one
+        found_entry = 1
+
+        // Link it
+        entry.name = local_name_dst;
+        entry.inode_reference = child_src;
+
+        // Write changes to block
+        vdisk_write_block(parent_inode.data[0], &dblock);
+        break;
+      }
+    }
+
+    if (!found_entry)
+    {
+      if (debug)
+        fprintf(stderr, "link: destination directory is full\n");
+      return -1;
+    }
+
+    // update inodes
+    parent_inode.size++;
+    inode.n_references++;
+    oufs_write_inode_by_reference(parent_dst, &parent_inode);
+    oufs_write_inode_by_reference(child, &inode);
+  }
+  else
+  {
+      if (debug)
+        fprintf(stderr, "link: src and dst parent dir must exist, dst must not exist\n");
+      return -1;
+  }
+  
+  return 0;
 }
