@@ -22,16 +22,18 @@ int main(int argc, char** argv) {
 
     // Open file for reading
     OUFILE *fp = oufs_fopen(strdup(cwd), strdup(argv[1]), "r");
-    char * buf;
 
     // Get file size
     INODE inode;
     oufs_read_inode_by_reference(fp->inode_reference, &inode);
     int len = inode.size;
+    unsigned char buf[len];
     
     // Read the file
-    oufs_fread(fp, buf, len)
-    printf(buf);
+    oufs_fread(fp, buf, len);
+
+    // Print it to stdout
+    printf("%.*s", len, buf);
     
     // Close the file
     oufs_fclose(fp);

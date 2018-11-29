@@ -1035,9 +1035,9 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   if (*mode == 'a')
   {
     // Get offset from inode size field
-    INODE *inode;
-    oufs_read_inode_by_reference(child, inode);
-    fp->offset = inode->size;
+    INODE inode;
+    oufs_read_inode_by_reference(child, &inode);
+    fp->offset = inode.size;
     return fp;
   }
 }
@@ -1163,7 +1163,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   return bytes_written;
 }
 
-int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
+int oufs_fread(OUFILE *fp, unsigned char *buf, int len)
 {
   if (fp->inode_reference == -1)
   {
@@ -1181,7 +1181,8 @@ int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
   int block_index = 0;
   int byte_index = 0;
   int bytes_read = 0;
-  memset(buf, '\0', len);
+  char new_buf[len];
+  memset(new_buf, '\0', len);
 
   // Check if first data block is unallocated
   if (inode.data[0] == UNALLOCATED_BLOCK)
@@ -1230,7 +1231,7 @@ int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
   for (int i = 0; i < len; i++)
   {
     // Read the byte
-    memset(buf+i, data_block.data.data[byte_index], 1);
+    new_buf[i] = data_block.data.data[byte_index];
     bytes_read++;
     byte_index++;
 
@@ -1259,6 +1260,7 @@ int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
     }
   }
 
+  strncpy(buf, new_buf, len);
   return bytes_read;
 }
 
