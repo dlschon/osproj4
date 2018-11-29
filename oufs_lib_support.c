@@ -472,7 +472,7 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
       if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
       {
         oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &inode);
-        if (!strcmp(theblock.directory.entry[i].name, token) && inode.type == IT_DIRECTORY)
+        if (!strcmp(theblock.directory.entry[i].name, token))
         {
           // found it!
           flag = 1;
@@ -480,14 +480,21 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
           ref = theblock.directory.entry[i].inode_reference;
 
           // load the inode
-          INODE inode;
           oufs_read_inode_by_reference(ref, &inode);
 
-          // Grab the next level block reference
-          current_block = inode.data[0];
+          if (inode.type == IT_DIRECTORY)
+          {
+            // Grab the next level block reference
+            current_block = inode.data[0];
+          }
+          else
+          {
+            // flag 2 signifies that we matched a file
+            flag == 2;
+          }
         }
       }
-    }
+    } // end for
 
     if (flag == 0)
     {
@@ -502,6 +509,13 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
     // Try to get the next token
     token = strtok(NULL, "/");
 
+    // If the found file is a file and there are more tokens, findfile failed.
+    if (flag == 2 && token != NULL)
+    {
+      if (debug)
+        fprintf(stderr, "find_file: can't descend into file\n");
+      return 0;
+    }
   } // end while
 
   // We're at the end of the path and we have presumably found the file. set the return values
@@ -982,20 +996,21 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   {
     BLOCK_REFERENCE data_block_ref;
     BLOCK data_block;
-    INODE *inode;
-    oufs_read_inode_by_reference(child, inode);
+    INODE inode;
+    printf("%d\n", child);
+    oufs_read_inode_by_reference(child, &inode);
 
     // If file is open for writing, clear file data first
     for (int i = 0; i < BLOCKS_PER_INODE; i++)
     {
-      data_block_ref = inode->data[i];
+      data_block_ref = inode.data[i];
       if (data_block_ref != UNALLOCATED_BLOCK)
       {
         // Clear out block data
         vdisk_read_block(data_block_ref, &data_block);
         for (int j = 0; j < 256; j++)
         {
-          data_block.data.data[j] = 0;
+          //data_block.data.data[j] = 0;
         }
         vdisk_write_block(data_block_ref, &data_block);
 
@@ -1037,9 +1052,10 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
     fprintf(stderr, "fwrite: File pointer invalid\n");
     return -1;
   }
+
   // Get file inode
-  INODE *inode;
-  oufs_read_inode_by_reference(fp->inode_reference, inode);
+  INODE inode;
+  oufs_read_inode_by_reference(fp->inode_reference, &inode);
 
   // Declare some variables related to the data block
   int block_index = 0;
@@ -1050,17 +1066,17 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
 
 
   // Check if first data block is unallocated
-  if (inode->data[0] == UNALLOCATED_BLOCK)
+  if (inode.data[0] == UNALLOCATED_BLOCK)
   {
     // File is empty, so create a new data block
     data_block_ref = oufs_allocate_new_block();
-    inode->data[0] = data_block_ref;
+    inode.data[0] = data_block_ref;
     vdisk_read_block(data_block_ref, &data_block);  
   }
   else
   {
     // Start at the first data block
-    data_block_ref = inode->data[0];
+    data_block_ref = inode.data[0];
     vdisk_read_block(data_block_ref, &data_block);  
   }
 
@@ -1082,10 +1098,15 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
       }
 
       // Create new data block if necessary
-      if (inode->data[block_index] == UNALLOCATED_BLOCK)
+      if (inode.data[block_index] == UNALLOCATED_BLOCK)
       {
         data_block_ref = oufs_allocate_new_block();
-        inode->data[block_index] = data_block_ref;
+        inode.data[block_index] = data_block_ref;
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+      else
+      {
+        data_block_ref = inode.data[block_index];
         vdisk_read_block(data_block_ref, &data_block);  
       }
     }
@@ -1096,7 +1117,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   {
     // Write the byte
     data_block.data.data[byte_index] = buf[i];
-    inode->size++;
+    inode.size++;
     byte_index++;
     bytes_written++;
 
@@ -1116,10 +1137,15 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
       }
 
       // Create new data block if necessary
-      if (inode->data[block_index] == UNALLOCATED_BLOCK)
+      if (inode.data[block_index] == UNALLOCATED_BLOCK)
       {
         data_block_ref = oufs_allocate_new_block();
-        inode->data[block_index] = data_block_ref;
+        inode.data[block_index] = data_block_ref;
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+      else
+      {
+        data_block_ref = inode.data[block_index];
         vdisk_read_block(data_block_ref, &data_block);  
       }
     }
@@ -1127,7 +1153,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
 
   // Done writing, save the current data block and inode
   vdisk_write_block(data_block_ref, &data_block);
-  oufs_write_inode_by_reference(fp->inode_reference, inode);
+  oufs_write_inode_by_reference(fp->inode_reference, &inode);
 
   // Update file pointer offset
   fp->offset += bytes_written;
