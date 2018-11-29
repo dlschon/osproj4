@@ -947,7 +947,7 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   char* base = basename(strdup(rel_path));
 
   // Declare struct to be returned in case of error
-  struct OUFILE fileError = {-1, *mode, -1};
+  OUFILE fileError = {-1, *mode, -1};
 
   // Declare find file outputs
   INODE_REFERENCE parent;
@@ -963,13 +963,13 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     if (*mode == 'r' || *mode == 'a')
     {
       fprintf(stderr, "fopen: Can't open nonexistent file for reading or appending");
-      return fileError;
+      return &fileError;
     }
     else if (*mode == 'w')
     {
       // Use touch to create the file
       if (oufs_touch(cwd, path) == -1)
-        return fileError;
+        return &fileError;
 
       // Run find file again to get the correct inode references
       oufs_find_file(cwd, rel_path, &parent, &child, local_name);
@@ -977,6 +977,11 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   }
   else if (*mode == 'w')
   {
+    BLOCK_REFERENCE data_block_ref;
+    BLOCK data_block;
+    INODE *inode;
+    oufs_read_inode_by_reference(child, inode);
+
     // If file is open for writing, clear file data first
     for (int i = 0; i < BLOCKS_PER_INODE; i++)
     {
@@ -987,12 +992,12 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
         vdisk_read_block(data_block_ref, &data_block);
         for (int j = 0; j < 256; j++)
         {
-          data_block.data[j] = 0;
+          data_block.data.data[j] = 0;
         }
-        vdisk_write_block(inode)
+        vdisk_write_block(data_block_ref, &data_block);
 
         // Deallocate block
-        oufs_deallocate_block(data_block_ref, &data_block);
+        oufs_deallocate_block(data_block_ref);
       }
     }
   }
@@ -1000,12 +1005,12 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   // Create file pointer struct and return it
   if (*mode == 'r')
   {
-    struct OUFILE file = {child, 'r', 0};
+    OUFILE file = {child, 'r', 0};
     return &file;
   }
   if (*mode == 'w')
   {
-    struct OUFILE file = {child, 'w', 0};
+    OUFILE file = {child, 'w', 0};
     return &file;
   }
   if (*mode == 'a')
@@ -1014,14 +1019,13 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     INODE *inode;
     oufs_read_inode_by_reference(child, inode);
     
-    struct OUFILE file = {child, 'a', inode->size};
+    OUFILE file = {child, 'a', inode->size};
     return &file;
   }
 }
 
 void oufs_fclose(OUFILE *fp)
 {
-  delete fp;
 }
 
 int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
@@ -1054,7 +1058,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   else
   {
     // Start at the first data block
-    data_block_ref = data[0];
+    data_block_ref = inode->data[0];
     vdisk_read_block(data_block_ref, &data_block);  
   }
 
@@ -1089,7 +1093,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   for (int i = 0; i < len; i++)
   {
     // Write the byte
-    block.data[byte_index] = buf[i];
+    data_block.data.data[byte_index] = buf[i];
     inode->size++;
     byte_index++;
     bytes_written++;
@@ -1121,7 +1125,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
 
   // Done writing, save the current data block and inode
   vdisk_write_block(data_block_ref, &data_block);
-  oufs_write_inode_by_reference(fp->inode_reference, &inode);
+  oufs_write_inode_by_reference(fp->inode_reference, inode);
 
   return bytes_written;
 }

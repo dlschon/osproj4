@@ -1,4 +1,4 @@
-all: zformat zinspect zfilez zmkdir zrmdir ztouch
+all: zformat zinspect zfilez zmkdir zrmdir ztouch zcreate
 
 .c.o:
 	gcc -c $< -o $@
@@ -15,6 +15,8 @@ zrmdir: zrmdir.c
 	gcc vdisk.c oufs_lib_support.c zrmdir.c -o zrmdir
 ztouch: ztouch.c
 	gcc vdisk.c oufs_lib_support.c ztouch.c -o ztouch
+zcreate: zcreate.c
+	gcc vdisk.c oufs_lib_support.c zcreate.c -o zcreate
 
 clean: 
-	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir ./ztouch
+	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir ./ztouch ./zcreate

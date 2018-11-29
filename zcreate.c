@@ -20,12 +20,10 @@ int main(int argc, char** argv) {
     // Open the virtual disk
     vdisk_disk_open(disk_name);
 
-    // Read STDIN into buffer
-    char * buf;
-    int len = 0;
-    char ch;
+    // Open file for reading
+    
 
-    // Read byte by byte
+    // Read byte by byte from stdin
     while (read(STDIN_FILENO, &ch, 1) > 0)
     {
       buf[len] = ch;
@@ -35,7 +33,8 @@ int main(int argc, char** argv) {
     buf[len] = '\0';
 
     printf(buf);
-
+    
+    int ret = 0;
     if(ret != 0) {
       fprintf(stderr, "Error (%d)\n", ret);
     }
