@@ -829,6 +829,12 @@ int oufs_rmdir(char *cwd, char *path)
   return 0;
 }
 
+/**
+ *  Creates an empty file if it doesn't exist yet
+ *  @param cwd current working directory
+ *  @param path file path to touch
+ *  @return status code
+ **/
 int oufs_touch(char *cwd, char *path)
 {
   // Get relative path
@@ -922,7 +928,13 @@ int oufs_touch(char *cwd, char *path)
   return 0;
 }
 
-
+/**
+ * Open a file and get its file pointer
+ * @param cwd current working directory
+ * @param path file to open
+ * @param mode 'w' 'r' or 'a', for write, read, or append
+ * @return file pointer to opened file
+ */
 OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
 {
   // Get relative path
@@ -947,12 +959,13 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
 
   if (!exists)
   {
+    // Error if non-existence permeates the file
     if (*mode == 'r' || *mode == 'a')
     {
       fprintf(stderr, "fopen: Can't open nonexistent file for reading or appending");
       return fileError;
     }
-    else
+    else if (*mode == 'w')
     {
       // Use touch to create the file
       if (oufs_touch(cwd, path) == -1)
@@ -962,7 +975,29 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
       oufs_find_file(cwd, rel_path, &parent, &child, local_name);
     }
   }
+  else if (*mode == 'w')
+  {
+    // If file is open for writing, clear file data first
+    for (int i = 0; i < BLOCKS_PER_INODE; i++)
+    {
+      data_block_ref = inode->data[i];
+      if (data_block_ref != UNALLOCATED_BLOCK)
+      {
+        // Clear out block data
+        vdisk_read_block(data_block_ref, &data_block);
+        for (int j = 0; j < 256; j++)
+        {
+          data_block.data[j] = 0;
+        }
+        vdisk_write_block(inode)
 
+        // Deallocate block
+        oufs_deallocate_block(data_block_ref, &data_block);
+      }
+    }
+  }
+
+  // Create file pointer struct and return it
   if (*mode == 'r')
   {
     struct OUFILE file = {child, 'r', 0};
@@ -975,19 +1010,120 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   }
   if (*mode == 'a')
   {
-    // Get size from file inode
+    // Get size from file inode for offset
+    INODE *inode;
+    oufs_read_inode_by_reference(child, inode);
     
-    struct OUFILE file = {child, 'a', 0};
+    struct OUFILE file = {child, 'a', inode->size};
     return &file;
   }
 }
 
 void oufs_fclose(OUFILE *fp)
 {
+  delete fp;
 }
 
 int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
 {
+  if (fp->inode_reference == -1)
+  {
+    fprintf(stderr, "fwrite: File pointer invalid\n");
+    return -1;
+  }
+  // Get file inode
+  INODE *inode;
+  oufs_read_inode_by_reference(fp->inode_reference, inode);
+
+  // Declare some variables related to the data block
+  int block_index = 0;
+  int byte_index = 0;
+  BLOCK_REFERENCE data_block_ref;
+  BLOCK data_block;
+  int bytes_written = 0;
+
+
+  // Check if first data block is unallocated
+  if (inode->data[0] == UNALLOCATED_BLOCK)
+  {
+    // File is empty, so create a new data block
+    data_block_ref = oufs_allocate_new_block();
+    inode->data[0] = data_block_ref;
+    vdisk_read_block(data_block_ref, &data_block);  
+  }
+  else
+  {
+    // Start at the first data block
+    data_block_ref = data[0];
+    vdisk_read_block(data_block_ref, &data_block);  
+  }
+
+  // Move indices according to file offset
+  for (int i = 0; i < fp->offset; i++)
+  {
+    byte_index++;
+
+    // If we have surpassed one data block, move on to the next
+    if (byte_index > 255)
+    {
+      byte_index = 0;
+      block_index++;
+
+      // Check if we've ran out of space
+      if (block_index == BLOCKS_PER_INODE)
+      {
+        return 0;
+      }
+
+      // Create new data block if necessary
+      if (inode->data[block_index] == UNALLOCATED_BLOCK)
+      {
+        data_block_ref = oufs_allocate_new_block();
+        inode->data[block_index] = data_block_ref;
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+    }
+  }
+
+  // Now that we have our correct index, start writing
+  for (int i = 0; i < len; i++)
+  {
+    // Write the byte
+    block.data[byte_index] = buf[i];
+    inode->size++;
+    byte_index++;
+    bytes_written++;
+
+    // If we have surpassed one data block, move on to the next
+    if (byte_index > 255)
+    {
+      // Write the old one
+      vdisk_write_block(data_block_ref, &data_block);
+
+      byte_index = 0;
+      block_index++;
+
+      // Check if we've ran out of space
+      if (block_index == BLOCKS_PER_INODE)
+      {
+        break;
+      }
+
+      // Create new data block if necessary
+      if (inode->data[block_index] == UNALLOCATED_BLOCK)
+      {
+        data_block_ref = oufs_allocate_new_block();
+        inode->data[block_index] = data_block_ref;
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+    }
+  }
+
+  // Done writing, save the current data block and inode
+  vdisk_write_block(data_block_ref, &data_block);
+  oufs_write_inode_by_reference(fp->inode_reference, &inode);
+
+  return bytes_written;
 }
 
 int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
