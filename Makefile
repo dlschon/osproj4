@@ -21,7 +21,7 @@ zappend: zappend.c
 	gcc vdisk.c oufs_lib_support.c zappend.c -o zappend
 zmore: zmore.c
 	gcc vdisk.c oufs_lib_support.c zmore.c -o zmore
-zmore: zremove.c
+zremove: zremove.c
 	gcc vdisk.c oufs_lib_support.c zremove.c -o zremove
 
 clean: 

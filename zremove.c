@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     vdisk_disk_open(disk_name);
 
     // remove file
-    oufs_remove(strdup(cwd), strdup(argv[1]))
+    oufs_remove(strdup(cwd), strdup(argv[1]));
 
     // Clean up
     vdisk_disk_close();
