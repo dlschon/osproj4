@@ -1165,6 +1165,101 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
 
 int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
 {
+  if (fp->inode_reference == -1)
+  {
+    fprintf(stderr, "fread: File pointer invalid\n");
+    return -1;
+  }
+
+  // Get file inode
+  INODE inode;
+  oufs_read_inode_by_reference(fp->inode_reference, &inode);
+
+  // Declare some variables related to the data block
+  BLOCK_REFERENCE data_block_ref;
+  BLOCK data_block;
+  int block_index = 0;
+  int byte_index = 0;
+  int bytes_read = 0;
+  memset(buf, '\0', len);
+
+  // Check if first data block is unallocated
+  if (inode.data[0] == UNALLOCATED_BLOCK)
+  {
+    // We can't read from an empty file
+    return 0;
+  }
+  else
+  {
+    // Start at the first data block
+    data_block_ref = inode.data[0];
+    vdisk_read_block(data_block_ref, &data_block);  
+  }
+
+  // Move indices according to file offset
+  for (int i = 0; i < fp->offset; i++)
+  {
+    byte_index++;
+
+    // If we have surpassed one data block, move on to the next
+    if (byte_index > 255)
+    {
+      byte_index = 0;
+      block_index++;
+
+      // Check if we've ran out of space
+      if (block_index == BLOCKS_PER_INODE)
+      {
+        return 0;
+      }
+
+      if (inode.data[block_index] == UNALLOCATED_BLOCK)
+      {
+        // Offset exceeds file length, return 0
+        return 0;
+      }
+      else
+      {
+        data_block_ref = inode.data[block_index];
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+    }
+  }
+
+  // Now read bytes into buffer
+  for (int i = 0; i < len; i++)
+  {
+    // Read the byte
+    memset(buf+i, data_block.data.data[byte_index], 1);
+    bytes_read++;
+    byte_index++;
+
+    // If we have surpassed one data block, move on to the next
+    if (byte_index > 255)
+    {
+      byte_index = 0;
+      block_index++;
+
+      // Check if we've ran out of space
+      if (block_index == BLOCKS_PER_INODE)
+      {
+        return 0;
+      }
+
+      if (inode.data[block_index] == UNALLOCATED_BLOCK)
+      {
+        // Offset exceeds file length, return 0
+        return 0;
+      }
+      else
+      {
+        data_block_ref = inode.data[block_index];
+        vdisk_read_block(data_block_ref, &data_block);  
+      }
+    }
+  }
+
+  return bytes_read;
 }
 
 int oufs_remove(char *cwd, char *path)
