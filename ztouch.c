@@ -21,7 +21,8 @@ int main(int argc, char** argv) {
     vdisk_disk_open(disk_name);
 
     // Make the specified directory
-    int ret = oufs_touch(cwd, argv[1]);
+    int ret = oufs_touch(strdup(cwd), strdup(argv[1]));
+
     if(ret != 0) {
       fprintf(stderr, "Error (%d)\n", ret);
     }

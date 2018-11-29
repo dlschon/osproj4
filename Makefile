@@ -17,4 +17,4 @@ ztouch: ztouch.c
 	gcc vdisk.c oufs_lib_support.c ztouch.c -o ztouch
 
 clean: 
-	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir
+	rm ./zformat ./zinspect ./zfilez ./zmkdir ./zrmdir ./ztouch

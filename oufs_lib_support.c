@@ -867,21 +867,17 @@ int oufs_touch(char *cwd, char *path)
       return -1;
   }
   
-  // Allocated the new block
-  BLOCK_REFERENCE new_file_block_ref = oufs_allocate_new_block();
-
   // Make a new inode for the new file
   INODE_REFERENCE new_inode_ref = oufs_allocate_new_inode();
   if (debug)
     fprintf(stderr, "new inode ref: %d\n", new_inode_ref);
 
-  // Set the inode for the new directory
+  // Set the inode for the new file
   INODE new_inode;
   oufs_read_inode_by_reference(new_inode_ref, &new_inode);
   new_inode.type = IT_FILE;
   new_inode.n_references = 1;
-  new_inode.data[0] = new_file_block_ref;
-  for (int i = 1; i < BLOCKS_PER_INODE; i++)
+  for (int i = 0; i < BLOCKS_PER_INODE; i++)
     new_inode.data[i] = UNALLOCATED_BLOCK;
   new_inode.size = 0;
   oufs_write_inode_by_reference(new_inode_ref, &new_inode);
@@ -924,4 +920,84 @@ int oufs_touch(char *cwd, char *path)
   }
 
   return 0;
+}
+
+
+OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
+{
+  // Get relative path
+  char rel_path[MAX_PATH_LENGTH];
+  memset(rel_path, 0, MAX_PATH_LENGTH);
+  oufs_relative_path(cwd, path, rel_path);
+
+  // Get base and directory names
+  char* dir = dirname(strdup(rel_path));
+  char* base = basename(strdup(rel_path));
+
+  // Declare struct to be returned in case of error
+  struct OUFILE fileError = {-1, *mode, -1};
+
+  // Declare find file outputs
+  INODE_REFERENCE parent;
+  INODE_REFERENCE child;
+  char* local_name;
+
+  // Try to find the file
+  int exists = oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+
+  if (!exists)
+  {
+    if (*mode == 'r' || *mode == 'a')
+    {
+      fprintf(stderr, "fopen: Can't open nonexistent file for reading or appending");
+      return fileError;
+    }
+    else
+    {
+      // Use touch to create the file
+      if (oufs_touch(cwd, path) == -1)
+        return fileError;
+
+      // Run find file again to get the correct inode references
+      oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+    }
+  }
+
+  if (*mode == 'r')
+  {
+    struct OUFILE file = {child, 'r', 0};
+    return &file;
+  }
+  if (*mode == 'w')
+  {
+    struct OUFILE file = {child, 'w', 0};
+    return &file;
+  }
+  if (*mode == 'a')
+  {
+    // Get size from file inode
+    
+    struct OUFILE file = {child, 'a', 0};
+    return &file;
+  }
+}
+
+void oufs_fclose(OUFILE *fp)
+{
+}
+
+int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
+{
+}
+
+int oufs_fread(OUFILE *fp, unsigned char * buf, int len)
+{
+}
+
+int oufs_remove(char *cwd, char *path)
+{
+}
+
+int oufs_link(char *cwd, char *path_src, char *path_dst)
+{
 }
