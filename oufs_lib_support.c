@@ -1426,7 +1426,8 @@ int oufs_link(char *cwd, char *path_src, char *path_dst)
         found_entry = 1;
 
         // Link it
-        entry.name = local_name_dst;
+        memset(entry.name, '\0', FILE_NAME_SIZE);
+        strncpy(entry.name, local_name_dst, FILE_NAME_SIZE-1);
         entry.inode_reference = child_src;
 
         // Write changes to block
