@@ -1267,6 +1267,59 @@ int oufs_fread(OUFILE *fp, unsigned char *buf, int len)
 
 int oufs_remove(char *cwd, char *path)
 {
+  // Get relative path
+  char rel_path[MAX_PATH_LENGTH];
+  memset(rel_path, 0, MAX_PATH_LENGTH);
+  oufs_relative_path(cwd, path, rel_path);
+
+  // Declare find file outputs
+  INODE_REFERENCE parent;
+  INODE_REFERENCE child;
+  char* local_name;
+
+  // Try to find the file
+  int exists = oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+
+  if (exists)
+  {
+    // Get inode for file to delete
+    INODE inode;
+    oufs_read_inode_by_reference(child, &inode);
+
+    // Block variables used for deleting
+    BLOCK_REFERENCE data_block_ref;
+    BLOCK data_block;
+
+    // clear data block by block
+    inode.size = 0;
+    for (int i = 0; i < BLOCKS_PER_INODE; i++)
+    {
+      data_block_ref = inode.data[i];
+      if (data_block_ref != UNALLOCATED_BLOCK)
+      {
+        // Clear out block data
+        vdisk_read_block(data_block_ref, &data_block);
+        for (int j = 0; j < 256; j++)
+        {
+          data_block.data.data[j] = 0;
+        }
+        vdisk_write_block(data_block_ref, &data_block);
+
+        // Deallocate block
+        oufs_deallocate_block(data_block_ref);
+
+        inode.data[i] = UNALLOCATED_BLOCK;
+      }
+    }
+    oufs_write_inode_by_reference(child, &inode);
+    oufs_deallocate_inode(child);
+  }
+  else
+  {
+    if (debug)
+      fprintf(stderr, "remove: file does not exist\n");
+    return -1;
+  }
 }
 
 int oufs_link(char *cwd, char *path_src, char *path_dst)
