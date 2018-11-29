@@ -1000,6 +1000,7 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
     oufs_read_inode_by_reference(child, &inode);
 
     // If file is open for writing, clear file data first
+    inode.size = 0;
     for (int i = 0; i < BLOCKS_PER_INODE; i++)
     {
       data_block_ref = inode.data[i];
@@ -1124,7 +1125,7 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
     bytes_written++;
 
     // If we have surpassed one data block, move on to the next
-    if (byte_index > 255)
+    if (byte_index > 255 && i < len - 1)
     {
       // Write the old one
       vdisk_write_block(data_block_ref, &data_block);
@@ -1236,7 +1237,7 @@ int oufs_fread(OUFILE *fp, unsigned char *buf, int len)
     byte_index++;
 
     // If we have surpassed one data block, move on to the next
-    if (byte_index > 255)
+    if (byte_index > 255 && i < len - 1)
     {
       byte_index = 0;
       block_index++;
