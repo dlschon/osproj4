@@ -30,10 +30,17 @@ int main(int argc, char** argv) {
     unsigned char buf[len];
     
     // Read the file
-    oufs_fread(fp, buf, len);
+    int ret = oufs_fread(fp, buf, len);
 
-    // Print it to stdout
-    printf("%.*s", len, buf);
+    if (ret != -1) 
+    {
+      // Print it to stdout
+      printf("%.*s", len, buf);
+    }
+    else
+    {
+      fprintf(stderr, "Error: (%d)\n", ret);
+    }
     
     // Close the file
     oufs_fclose(fp);

@@ -353,7 +353,7 @@ int oufs_find_open_bit(unsigned char value)
  * @param path working path
  * @param rel_path the thing we're outputting
  */
-char* oufs_relative_path(char* cwd, char* path, char* rel_path)
+void oufs_relative_path(char* cwd, char* path, char* rel_path)
 {
   if (!strcmp(path, ""))
     // Path is blank so just use the cwd
@@ -458,7 +458,7 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
 
   // Tokenize the path
   INODE inode;
-  char* token = strtok(listdir, "/");
+  char *token = strtok(listdir, "/");
   char lasttoken[FILE_NAME_SIZE];
   memset(lasttoken, '\0', FILE_NAME_SIZE);
   lasttoken[0] = '/';
@@ -471,8 +471,11 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
     {
       if (theblock.directory.entry[i].inode_reference != UNALLOCATED_INODE)
       {
+        char token_trunc[FILE_NAME_SIZE];
+        memset(token_trunc, '\0', FILE_NAME_SIZE);
+        strncpy(token_trunc, token, FILE_NAME_SIZE-1);
         oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &inode);
-        if (!strcmp(theblock.directory.entry[i].name, token))
+        if (!strcmp(theblock.directory.entry[i].name, token_trunc))
         {
           // found it!
           flag = 1;
@@ -500,12 +503,15 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
     {
       if (debug)
         fprintf(stderr, "find_file: directory does not exist\n");
+      *child = -1;
+      *parent = -1;
+      memset(lasttoken, '\0', FILE_NAME_SIZE);
       return 0;
     }
 
     // Save the token into the last token variable
     memset(lasttoken, '\0', FILE_NAME_SIZE);
-    strncpy(lasttoken, token, FILE_NAME_SIZE);
+    strncpy(lasttoken, token, FILE_NAME_SIZE-1);
     // Try to get the next token
     token = strtok(NULL, "/");
 
@@ -521,7 +527,7 @@ int oufs_find_file(char *cwd, char * path, INODE_REFERENCE *parent, INODE_REFERE
   // We're at the end of the path and we have presumably found the file. set the return values
   *child = ref;
   *parent = lastref;
-  local_name = lasttoken;
+  strncpy(local_name, lasttoken, FILE_NAME_SIZE-1);
 
   if (debug)
   {
@@ -554,7 +560,7 @@ int oufs_list(char *cwd, char *path)
   // Declare some variables which will be assigned by find_file
   INODE_REFERENCE child;
   INODE_REFERENCE parent;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
 
   // Find the file
   if (!oufs_find_file(cwd, path, &parent, &child, local_name))
@@ -587,7 +593,7 @@ int oufs_list(char *cwd, char *path)
         oufs_read_inode_by_reference(theblock.directory.entry[i].inode_reference, &thenode);
 
         // Add name to the list
-        filelist[numFiles] = theblock.directory.entry[i].name;
+        filelist[numFiles] = strdup(theblock.directory.entry[i].name);
           
         // Add a trailing forward slash if its a directory
         if (thenode.type == IT_DIRECTORY)
@@ -601,7 +607,9 @@ int oufs_list(char *cwd, char *path)
     qsort(filelist, numFiles, sizeof(char*), cstring_cmp);
 
     // Print the sorted list
-    for (int i = 0; i < numFiles; i++)
+    printf("./\n");
+    printf("../\n");
+    for (int i = 2; i < numFiles; i++)
     {
       printf("%s\n", filelist[i]);
     }
@@ -635,7 +643,7 @@ int oufs_mkdir(char *cwd, char *path)
   // Find file outputs
   INODE_REFERENCE parent;
   INODE_REFERENCE child;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
 
   INODE_REFERENCE new_dir_parent;
 
@@ -651,7 +659,7 @@ int oufs_mkdir(char *cwd, char *path)
     new_dir_parent = child;
 
   // Child directory must not exist
-  if (oufs_find_file(cwd, rel_path, &parent, &child, local_name))
+  if (oufs_find_file(cwd, path, &parent, &child, local_name))
   {
       // Directory we are trying to make already exists
       if (debug)
@@ -743,10 +751,10 @@ int oufs_rmdir(char *cwd, char *path)
   // Find file outputs
   INODE_REFERENCE parent_inode_ref;
   INODE_REFERENCE child_inode_ref;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
 
   // Directory must exist
-  if (!oufs_find_file(cwd, rel_path, &parent_inode_ref, &child_inode_ref, local_name))
+  if (!oufs_find_file(cwd, path, &parent_inode_ref, &child_inode_ref, local_name))
   {
       // Directory we are trying to make already exists
       if (debug)
@@ -863,7 +871,7 @@ int oufs_touch(char *cwd, char *path)
   // Find file outputs
   INODE_REFERENCE parent;
   INODE_REFERENCE child;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
 
   INODE_REFERENCE new_file_parent;
 
@@ -879,7 +887,7 @@ int oufs_touch(char *cwd, char *path)
     new_file_parent = child;
 
   // Child directory must not exist
-  if (oufs_find_file(cwd, rel_path, &parent, &child, local_name))
+  if (oufs_find_file(cwd, path, &parent, &child, local_name))
   {
       // Directory we are trying to make already exists
       if (debug)
@@ -951,15 +959,6 @@ int oufs_touch(char *cwd, char *path)
  */
 OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
 {
-  // Get relative path
-  char rel_path[MAX_PATH_LENGTH];
-  memset(rel_path, 0, MAX_PATH_LENGTH);
-  oufs_relative_path(cwd, path, rel_path);
-
-  // Get base and directory names
-  char* dir = dirname(strdup(rel_path));
-  char* base = basename(strdup(rel_path));
-
   // Declare struct to be returned in case of error
   OUFILE *fileError = malloc(sizeof(OUFILE));
   fileError->inode_reference = -1;
@@ -969,27 +968,27 @@ OUFILE* oufs_fopen(char *cwd, char *path, char *mode)
   // Declare find file outputs
   INODE_REFERENCE parent;
   INODE_REFERENCE child;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
 
   // Try to find the file
-  int exists = oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+  int exists = oufs_find_file(cwd, path, &parent, &child, local_name);
 
   if (!exists)
   {
-    // Error if non-existence permeates the file
-    if (*mode == 'r' || *mode == 'a')
+    // Error if file doesn't exist and mode is read
+    if (*mode == 'r')
     {
       fprintf(stderr, "fopen: Can't open nonexistent file for reading or appending");
       return fileError;
     }
-    else if (*mode == 'w')
+    else if (*mode == 'w' || *mode == 'a')
     {
       // Use touch to create the file
       if (oufs_touch(cwd, path) == -1)
         return fileError;
 
       // Run find file again to get the correct inode references
-      oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+      oufs_find_file(cwd, path, &parent, &child, local_name);
     }
   }
   else if (*mode == 'w')
@@ -1059,6 +1058,13 @@ int oufs_fwrite(OUFILE *fp, unsigned char * buf, int len)
   // Get file inode
   INODE inode;
   oufs_read_inode_by_reference(fp->inode_reference, &inode);
+
+  if (inode.type != IT_FILE)
+  {
+    if (debug)
+      fprintf(stderr, "fwrite: must be file\n");
+    return -1;
+  }
 
   // Declare some variables related to the data block
   int block_index = 0;
@@ -1176,6 +1182,13 @@ int oufs_fread(OUFILE *fp, unsigned char *buf, int len)
   INODE inode;
   oufs_read_inode_by_reference(fp->inode_reference, &inode);
 
+  if (inode.type != IT_FILE)
+  {
+    if (debug)
+      fprintf(stderr, "fread: must be file\n");
+    return -1;
+  }
+
   // Declare some variables related to the data block
   BLOCK_REFERENCE data_block_ref;
   BLOCK data_block;
@@ -1267,18 +1280,15 @@ int oufs_fread(OUFILE *fp, unsigned char *buf, int len)
 
 int oufs_remove(char *cwd, char *path)
 {
-  // Get relative path
-  char rel_path[MAX_PATH_LENGTH];
-  memset(rel_path, 0, MAX_PATH_LENGTH);
-  oufs_relative_path(cwd, path, rel_path);
-
   // Declare find file outputs
   INODE_REFERENCE parent;
   INODE_REFERENCE child;
-  char* local_name;
+  char local_name[FILE_NAME_SIZE];
+
+  char* base = basename(strdup(path));
 
   // Try to find the file
-  int exists = oufs_find_file(cwd, rel_path, &parent, &child, local_name);
+  int exists = oufs_find_file(cwd, path, &parent, &child, local_name);
 
   if (exists)
   {
@@ -1293,67 +1303,72 @@ int oufs_remove(char *cwd, char *path)
       return -1;
     }
 
-    // Block variables used for deleting
-    BLOCK_REFERENCE data_block_ref;
-    BLOCK data_block;
 
-    // clear data block by block
-    inode.size = 0;
-    for (int i = 0; i < BLOCKS_PER_INODE; i++)
+    // Remove reference from parent
+    // Read data for parent of deleted directory
+    INODE parent_inode;
+    oufs_read_inode_by_reference(parent, &parent_inode);
+    BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
+    BLOCK parent_block;
+    vdisk_read_block(parent_block_ref, &parent_block);
+
+    // Remove the directory's entry from its parent directory
+    int removed_entry = 0;
+    for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
     {
-      data_block_ref = inode.data[i];
-      if (data_block_ref != UNALLOCATED_BLOCK)
+      // Does the directory entry point to the one we're deleting?
+      if (!strcmp(parent_block.directory.entry[i].name, base))
       {
-        // Clear out block data
-        vdisk_read_block(data_block_ref, &data_block);
-        for (int j = 0; j < 256; j++)
-        {
-          data_block.data.data[j] = 0;
-        }
-        vdisk_write_block(data_block_ref, &data_block);
+        // Set the empty entry to point to our new inode
+        strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
+        parent_block.directory.entry[i].inode_reference = UNALLOCATED_INODE;
+        removed_entry = 1;
+        vdisk_write_block(parent_block_ref, &parent_block);
 
-        // Deallocate block
-        oufs_deallocate_block(data_block_ref);
+        // Update file count in inode
+        parent_inode.size--;
+        oufs_write_inode_by_reference(parent, &parent_inode);
 
-        inode.data[i] = UNALLOCATED_BLOCK;
+        // Exit the for loop
+        break;
       }
     }
-    inode.n_references--;
-    oufs_write_inode_by_reference(child, &inode);
-    oufs_deallocate_inode(child);
 
+    // Decrease reference count
+    inode.n_references--;
+
+    // If there are no more references, clear up the data
     if (inode.n_references == 0)
     {
-      // Remove reference from parent
-      // Read data for parent of deleted directory
-      INODE parent_inode;
-      oufs_read_inode_by_reference(parent, &parent_inode);
-      BLOCK_REFERENCE parent_block_ref = parent_inode.data[0];
-      BLOCK parent_block;
-      vdisk_read_block(parent_block_ref, &parent_block);
+      // Block variables used for deleting
+      BLOCK_REFERENCE data_block_ref;
+      BLOCK data_block;
 
-      // Remove the directory's entry from its parent directory
-      int removed_entry = 0;
-      for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
+      // clear data block by block
+      inode.size = 0;
+      for (int i = 0; i < BLOCKS_PER_INODE; i++)
       {
-        // Does the directory entry point to the one we're deleting?
-        if (parent_block.directory.entry[i].inode_reference == child)
+        data_block_ref = inode.data[i];
+        if (data_block_ref != UNALLOCATED_BLOCK)
         {
-          // Set the empty entry to point to our new inode
-          strncpy(parent_block.directory.entry[i].name, "", FILE_NAME_SIZE);
-          parent_block.directory.entry[i].inode_reference = UNALLOCATED_INODE;
-          removed_entry = 1;
-          vdisk_write_block(parent_block_ref, &parent_block);
+          // Clear out block data
+          vdisk_read_block(data_block_ref, &data_block);
+          for (int j = 0; j < 256; j++)
+          {
+            data_block.data.data[j] = 0;
+          }
+          vdisk_write_block(data_block_ref, &data_block);
 
-          // Update file count in inode
-          parent_inode.size--;
-          oufs_write_inode_by_reference(parent, &parent_inode);
+          // Deallocate block
+          oufs_deallocate_block(data_block_ref);
 
-          // Exit the for loop
-          break;
+          inode.data[i] = UNALLOCATED_BLOCK;
         }
       }
+      oufs_deallocate_inode(child);
     }
+    oufs_write_inode_by_reference(child, &inode);
+
   }
   else
   {
@@ -1365,30 +1380,23 @@ int oufs_remove(char *cwd, char *path)
 
 int oufs_link(char *cwd, char *path_src, char *path_dst)
 {
-  // Get relative paths
-  char rel_path_src[MAX_PATH_LENGTH];
-  char rel_path_dst[MAX_PATH_LENGTH];
-  memset(rel_path_src, 0, MAX_PATH_LENGTH);
-  memset(rel_path_dst, 0, MAX_PATH_LENGTH);
-  oufs_relative_path(cwd, path_src, rel_path_src);
-  oufs_relative_path(cwd, path_dst, rel_path_dst);
-
   // Get dest directory name
-  char* dst_dir = dirname(strdup(rel_path_dst));
+  char* dst_dir = dirname(strdup(path_dst));
+  char* dst_base = basename(strdup(path_dst));
 
   // Declare find file outputs
   INODE_REFERENCE parent_src;
   INODE_REFERENCE child_src;
-  char* local_name_src;
+  char local_name_src[FILE_NAME_SIZE];
   INODE_REFERENCE grandparent_dst;
   INODE_REFERENCE parent_dst;
   INODE_REFERENCE child_dst;
-  char* local_name_dst;
-  char* local_name_dst_dir;
+  char local_name_dst[FILE_NAME_SIZE];
+  char local_name_dst_dir[FILE_NAME_SIZE];
 
   // Try to find the files
-  int src_exists = oufs_find_file(cwd, rel_path_src, &parent_src, &child_src, local_name_src);
-  int dst_exists = oufs_find_file(cwd, rel_path_dst, &parent_dst, &child_dst, local_name_dst);
+  int src_exists = oufs_find_file(cwd, path_src, &parent_src, &child_src, local_name_src);
+  int dst_exists = oufs_find_file(cwd, path_dst, &parent_dst, &child_dst, local_name_dst);
   int dst_dir_exists = oufs_find_file(cwd, dst_dir, &grandparent_dst, &parent_dst, local_name_dst_dir);
 
   // Make sure that
@@ -1419,16 +1427,15 @@ int oufs_link(char *cwd, char *path_src, char *path_dst)
     DIRECTORY_ENTRY entry;
     for (int i = 0; i < DIRECTORY_ENTRIES_PER_BLOCK; i++)
     {
-      entry = dblock.directory.entry[i];
-      if (entry.inode_reference == UNALLOCATED_INODE)
+      if (dblock.directory.entry[i].inode_reference == UNALLOCATED_INODE)
       {
         // Found an empty one
         found_entry = 1;
 
         // Link it
-        memset(entry.name, '\0', FILE_NAME_SIZE);
-        strncpy(entry.name, local_name_dst, FILE_NAME_SIZE-1);
-        entry.inode_reference = child_src;
+        memset(dblock.directory.entry[i].name, 0, FILE_NAME_SIZE);
+        strncpy(dblock.directory.entry[i].name, dst_base, FILE_NAME_SIZE-1);
+        dblock.directory.entry[i].inode_reference = child_src;
 
         // Write changes to block
         vdisk_write_block(parent_inode.data[0], &dblock);
